@@ -17,6 +17,49 @@ Tibber Pulse is optional, but will enable live measurements.
 
 The channels (i.e. measurements) associated with the Binding:
 
+## Thing Configuration
+
+| Name          | Type      | Description                           | Default   | Required  |
+|---------------|-----------|---------------------------------------|-----------|-----------|
+| token         | text      | Tibber Personal Token                 | N/A       | yes       |
+| homeid        | text      | Tibber Home ID                        | N/A       | yes       |
+| updateHour    | integer   | Hour when spot prices are updated     | 13        | yes       |
+
+To access and initiate the Tibber Binding, a Tibber user account is required.
+
+The following input is required for initialization:
+
+- Tibber token
+- Tibber HomeId
+- Refresh Interval (min 1 minute)
+
+Note: Tibber token is retrieved from your Tibber account:
+[Tibber Account](https://developer.tibber.com/settings/accesstoken)
+
+Note: Tibber HomeId is retrieved from [developer.tibber.com](https://developer.tibber.com/explorer):
+
+- Sign in (Tibber user account) and "load" personal token.
+- Copy query from below and paste into the Tibber API Explorer, and run query.
+- If Tibber Pulse is connected, the Tibber API Explorer will report "true" for "realTimeConsumptionEnabled"
+- Copy HomeId from Tibber API Explorer, without quotation marks, and use this in the bindings configuration.
+
+```json
+{
+  viewer {
+    homes {
+      id
+      features {
+        realTimeConsumptionEnabled
+      }
+    }
+  }
+}
+```
+
+If user have multiple HomeIds / Pulse, separate Things have to be created for the different/desired HomeIds.
+
+## Channels
+
 ### price group
 
 Forecast values og Tibber pricing.
@@ -80,47 +123,6 @@ All values read-only.
 | daily-production      | Number:Energy             | Net energy produced since midnight in kilowatt-hours          |
 | last-hour-production  | Number:Energy             | Net energy produced since last hour shift in kilowatt-hours   |
 
-## Thing Configuration
-
-| Name          | Type      | Description                           | Default   | Required  |
-|---------------|-----------|---------------------------------------|-----------|-----------|
-| token         | text      | Tibber Personal Token                 | N/A       | yes       |
-| homeid        | text      | Tibber Home ID                        | N/A       | yes       |
-| updateHour    | integer   | Hour when spot prices are updated     | 13        | yes       |
-
-To access and initiate the Tibber Binding, a Tibber user account is required.
-
-The following input is required for initialization:
-
-- Tibber token
-- Tibber HomeId
-- Refresh Interval (min 1 minute)
-
-Note: Tibber token is retrieved from your Tibber account:
-[Tibber Account](https://developer.tibber.com/settings/accesstoken)
-
-Note: Tibber HomeId is retrieved from [developer.tibber.com](https://developer.tibber.com/explorer):
-
-- Sign in (Tibber user account) and "load" personal token.
-- Copy query from below and paste into the Tibber API Explorer, and run query.
-- If Tibber Pulse is connected, the Tibber API Explorer will report "true" for "realTimeConsumptionEnabled"
-- Copy HomeId from Tibber API Explorer, without quotation marks, and use this in the bindings configuration.
-
-```json
-{
-  viewer {
-    homes {
-      id
-      features {
-        realTimeConsumptionEnabled
-      }
-    }
-  }
-}
-```
-
-If user have multiple HomeIds / Pulse, separate Things have to be created for the different/desired HomeIds.
-
 ## Thing Actions
 
 Thing actions can be used to perform calculations on the current available price information cached by the binding. 
@@ -152,7 +154,7 @@ In case of error `Instant.MIN` is returned.
 
 List prices in ascending / decending _price_ order.
 
-Parameters:
+**Parameters:**
 
 | Name          | Type      | Description                           | Default           | Required  |
 |---------------|-----------|---------------------------------------|-------------------|-----------|
@@ -160,7 +162,7 @@ Parameters:
 | latestStop    | Instant   | Latest end time                       | `priceInfoEnd`    | no        |
 | ascending     | boolean   | Hour when spot prices are updated     | true              | no        |
 
-Result:
+**Result:**
 
 JSON encoded `String` result with keys
  
@@ -182,7 +184,7 @@ JSON Object `priceInfo`
 Calculates best cost for a consecutive period.
 For use cases like dishwasher or laundry.
 
-Parameters:
+**Parameters:**
 
 | Name          | Type      | Description                                   | Default           | Required  |
 |---------------|-----------|-----------------------------------------------|-------------------|-----------|
@@ -205,7 +207,7 @@ JSON Object `curveEntry`
 | power         | int       | Power in watts                        |
 | duration      | int       | Duration in seconds                   |
 
-Result:
+**Result:**
 
 JSON encoded `String` result with keys
  
@@ -222,7 +224,7 @@ JSON encoded `String` result with keys
 Calculates best cost for a non-consecutive schedule.
 For use cases like battery electric vehicle or heat-pump.
 
-Parameters:
+**Parameters:**
 
 | Name          | Type      | Description              w             | Default          | Required  |
 |---------------|-----------|---------------------------------------|-------------------|-----------|
@@ -231,7 +233,7 @@ Parameters:
 | power         | int       | Needed power                          | N/A               | no        |
 | duration      | int       | Hour when spot prices are updated     | N/A               | yes       |
 
-Result:
+**Result:**
 
 JSON encoded `String` result with keys
  
@@ -301,7 +303,7 @@ var Timer bestPriceTimer = null
 
 rule "Tibber Best Price"
 when
-    System started
+    System started // use your trigger
 then
     // get actions
     var actions = getActions("tibber","tibber:tibberapi:2c80fe4fe3")
@@ -342,7 +344,7 @@ Console output:
 ```java
 rule "Tibber Schedule Calculation"
 when
-    System started
+    System started // use your trigger
 then
     var actions = getActions("tibber","tibber:tibberapi:2c80fe4fe3")
     // long period with constant power value
@@ -379,6 +381,7 @@ Thing tibber:tibberapi:7cfae492 [ homeid="xxx", token="xxxxxxx", updateHour=13 ]
 
 ### `demo.items` Example
 
+**to be updated**
 ```java
 Number:EnergyPrice       TibberAPICurrentTotal                 "Current Total Price [%.2f NOK]"            {channel="tibber:tibberapi:7cfae492:current_total"}
 Number       TibberAPIDailyCost                    "Total Daily Cost [%.2f NOK]"               {channel="tibber:tibberapi:7cfae492:daily_cost"}
