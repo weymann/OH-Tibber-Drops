@@ -1,17 +1,14 @@
 # Tibber Binding
 
-The Tibber Binding retrieve `prices`, `live` and `statistic` data form  [Tibber API](https://developer.tibber.com).
+The Tibber Binding retrieves `prices` form  [Tibber API](https://developer.tibber.com).
 Users equipped with Tibber Pulse hardware can connect in addition to [live group](#live-group) and [statistics group](#livestatistics-group).
 
 
 ## Supported Things
 
-Provided one have a Tibber User Account, the Tibber API is recognized as a thing in openHAB using the Tibber Binding.
-To access and initiate the Tibber Binding, a Tibber user account is required.
-
-Tibber Pulse is optional, but will enable live measurements.
-
-The channels (i.e. measurements) associated with the Binding:
+| Type      | ID        | Description               | 
+|-----------|-----------|---------------------------|
+| Thing     | tibberapi | Connection to Tibber API  |
 
 ## Thing Configuration
 
