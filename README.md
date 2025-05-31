@@ -1,7 +1,7 @@
 # Tibber Binding
 
 The Tibber Binding retrieves `prices` form  [Tibber API](https://developer.tibber.com).
-Users equipped with Tibber Pulse hardware can connect in addition to [live group](#live-group) and [statistics group](#livestatistics-group).
+Users equipped with Tibber Pulse hardware can connect in addition to [live group](#live-group) and [statistics group](#statistics-group).
 
 
 ## Supported Things
@@ -29,7 +29,7 @@ Note: Tibber HomeId is retrieved from [developer.tibber.com](https://developer.t
 - If Tibber Pulse is connected, the Tibber API Explorer will report "true" for "realTimeConsumptionEnabled"
 - Copy HomeId from Tibber API Explorer, without quotation marks, and use this in the bindings configuration.
 
-```json
+```
 {
   viewer {
     homes {
@@ -48,12 +48,12 @@ If user have multiple HomeIds / Pulse, separate Things have to be created for th
 
 ### `price` group
 
-Forecast values og Tibber pricing.
+Current and forecast Tibber price information.
 All read-only.
 
 | Channel ID        | Type                 | Description         | Forecast |
 |-------------------|----------------------|---------------------|----------|
-| spot-prices       | Number:EnergyPrice   | Spot Prices         | yes      |
+| spot-price        | Number:EnergyPrice   | Spot Prices         | yes      |
 | level             | Number               | Price Level         | yes      |
 | average           | Number:EnergyPrice   | Average 24h         | yes      |
 
@@ -72,6 +72,9 @@ Mapping:
 The `average` values are not delivered by Tibber API.
 It's calculated by the binding to provide a trend line for the last 24 hours.
 After initial setup the average values will stay NULL until the next day because the previous 24 h prices cannot be obtained by the Tibber API.
+
+Please note forecasts are not supported by the default [rrd4j](https://www.openhab.org/addons/persistence/rrd4j/) persistence.
+The items connected to the above channels needs to be stored in [influxdb](https://www.openhab.org/addons/persistence/influxdb/) or [inmemory](https://www.openhab.org/addons/persistence/inmemory/).
 
 ### `live` group
 
@@ -140,7 +143,7 @@ In case of error `Instant.MIN` is returned.
 
 List prices in ascending / decending _price_ order.
 
-**Parameters:**
+#### Parameters
 
 | Name          | Type      | Description                           | Default           | Required  |
 |---------------|-----------|---------------------------------------|-------------------|-----------|
@@ -148,7 +151,40 @@ List prices in ascending / decending _price_ order.
 | latestStop    | Instant   | Latest end time                       | `priceInfoEnd`    | no        |
 | ascending     | boolean   | Hour when spot prices are updated     | true              | no        |
 
-**Result:**
+#### Example
+
+```javascript
+rule "Tibber Price List"
+when
+    System started // use your trigger
+then
+    var actions = getActions("tibber","tibber:tibberapi:xyz")
+    // parameters empty => default parameters are used = starting from now till end of available price infos, ascending
+    var parameters = "{}"
+    var result = actions.listPrices(parameters)
+    val numberOfPrices = transform("JSONPATH", "$.size", result)
+    logInfo("TibberPriceList",result)
+    for(var i=0; i<Integer.valueOf(numberOfPrices); i++) {
+        // get values and convert them into correct format
+        val priceString = transform("JSONPATH", "$.priceList["+i+"].price", result)
+        val price = Double.valueOf(priceString)
+        val startsAtString = transform("JSONPATH", "$.priceList["+i+"].startsAt", result)
+        val startsAt = Instant.parse(startsAtString)
+        logInfo("TibberPriceList","PriceInfo "+i+" : " + price + " Starts at : " + startsAt.atZone(ZoneId.systemDefault()))
+    }
+end
+```
+
+**Console output**
+
+```
+2025-05-29 15:52:31.345 [INFO ] [ab.core.model.script.TibberPriceList] - PriceInfo 0 : 0.1829 Starts at : 2025-05-30T13:00+02:00[Europe/Berlin]
+2025-05-29 15:52:31.349 [INFO ] [ab.core.model.script.TibberPriceList] - PriceInfo 1 : 0.183 Starts at : 2025-05-30T14:00+02:00[Europe/Berlin]
+2025-05-29 15:52:31.352 [INFO ] [ab.core.model.script.TibberPriceList] - PriceInfo 2 : 0.1842 Starts at : 2025-05-29T15:52:31.341193101+02:00[Europe/Berlin]
+...
+```
+
+### Result
 
 JSON encoded `String` result with keys
  
@@ -165,12 +201,46 @@ JSON Object `priceInfo`
 | duration      | int       | Price duration in seconds             |
 | price         | double    | Price in your currency                |
 
+#### Example
+
+```json
+{
+    "size": 4,
+    "priceList": [
+        {
+            "price": 0.1623,
+            "duration": 3600,
+            "level": -1,
+            "startsAt": "2025-06-01T12:00:00Z"
+        },
+        {
+            "price": 0.168,
+            "duration": 3600,
+            "level": -1,
+            "startsAt": "2025-06-01T13:00:00Z"
+        },
+        {
+            "price": 0.1712,
+            "duration": 3600,
+            "level": -1,
+            "startsAt": "2025-06-01T11:00:00Z"
+        },
+        {
+            "price": 0.1794,
+            "duration": 3600,
+            "level": -1,
+            "startsAt": "2025-06-01T14:00:00Z"
+        }
+    ]
+}
+```
+
 ### `bestPricePeriod`
 
 Calculates best cost for a consecutive period.
 For use cases like dishwasher or laundry.
 
-**Parameters:**
+#### Parameters
 
 | Name          | Type      | Description                                   | Default           | Required  |
 |---------------|-----------|-----------------------------------------------|-------------------|-----------|
@@ -193,96 +263,9 @@ JSON Object `curveEntry`
 | power         | int       | Power in watts                        |
 | duration      | int       | Duration in seconds                   |
 
-**Result:**
+#### Example
 
-JSON encoded `String` result with keys
- 
-| Key                   | Type      | Description                           | 
-|-----------------------|-----------|---------------------------------------|
-| cheapestStart         | String    | Timestamp of cheapest start           |
-| lowestPrice           | double    | Price of the cheapest period          |
-| mostExpensiveStart    | String    | Timestamp of most expensive start     |
-| highestPrice          | double    | Price of the most expensive period    |
-| averagePrice          | double    | Average price within the period       |
-
-### `bestPriceSchedule`
-
-Calculates best cost for a non-consecutive schedule.
-For use cases like battery electric vehicle or heat-pump.
-
-**Parameters:**
-
-| Name          | Type      | Description              w             | Default          | Required  |
-|---------------|-----------|---------------------------------------|-------------------|-----------|
-| earliestStart | Instant   | Earliest start time                   | now               | no        |
-| latestStop    | Instant   | Latest end time                       | `priceInfoEnd`    | no        |
-| power         | int       | Needed power                          | N/A               | no        |
-| duration      | int       | Hour when spot prices are updated     | N/A               | yes       |
-
-**Result:**
-
-JSON encoded `String` result with keys
- 
-| Key           | Type      | Description                           | 
-|---------------|-----------|---------------------------------------|
-| size          | int       | Number of schedules                   |
-| schedule      | JsonArray | Array of `scheduleEntry` elements     |
-
-JSON Object `scheduleEntry`
-
-| Key           | Type      | Description                           | 
-|---------------|-----------|---------------------------------------|
-| timestamp     | String    | String encoded Instant                |
-| duration      | int       | Price duration in seconds             |
-| price         | double    | Price in your currency                |
-
-Provide either 
-
-- `timestamp` - duration will be calculated automatically _or_
-- `duration` if you already know it
-
-## Action Examples
-
-### List prices in ascending order
-
-Example rule:
-
-```java
-rule "Tibber Price List"
-when
-    System started // use your trigger
-then
-    var actions = getActions("tibber","tibber:tibberapi:xyz")
-    // parameters empty => default parameters are used = starting from now till end of available price infos, ascending
-    var parameters = "{}"
-    var result = actions.listPrices(parameters)
-    val numberOfPrices = transform("JSONPATH", "$.size", result)
-    logInfo("TibberPriceList",result)
-    for(var i=0; i<Integer.valueOf(numberOfPrices); i++) {
-        // get values and convert them into correct format
-        val priceString = transform("JSONPATH", "$.priceList["+i+"].price", result)
-        val price = Double.valueOf(priceString)
-        val startsAtString = transform("JSONPATH", "$.priceList["+i+"].startsAt", result)
-        val startsAt = Instant.parse(startsAtString)
-        logInfo("TibberPriceList","PriceInfo "+i+" : " + price + " Starts at : " + startsAt.atZone(ZoneId.systemDefault()))
-    }
-end
-```
-
-Console output:
-
-```
-2025-05-29 15:52:31.345 [INFO ] [ab.core.model.script.TibberPriceList] - PriceInfo 0 : 0.1829 Starts at : 2025-05-30T13:00+02:00[Europe/Berlin]
-2025-05-29 15:52:31.349 [INFO ] [ab.core.model.script.TibberPriceList] - PriceInfo 1 : 0.183 Starts at : 2025-05-30T14:00+02:00[Europe/Berlin]
-2025-05-29 15:52:31.352 [INFO ] [ab.core.model.script.TibberPriceList] - PriceInfo 2 : 0.1842 Starts at : 2025-05-29T15:52:31.341193101+02:00[Europe/Berlin]
-...
-```
-
-### Calculate best price period
-
-Example rule:
-
-```java
+```javascript
 import java.util.Map;
 
 var Timer bestPriceTimer = null
@@ -325,9 +308,48 @@ Console output:
 2025-05-29 16:07:40.967 [INFO ] [ab.core.model.script.TibberBestPrice] - Start your device
 ```
 
-### Calculate best price schedule
 
-```java
+#### Result
+
+JSON encoded `String` result with keys
+ 
+| Key                   | Type      | Description                           | 
+|-----------------------|-----------|---------------------------------------|
+| cheapestStart         | String    | Timestamp of cheapest start           |
+| lowestPrice           | double    | Price of the cheapest period          |
+| mostExpensiveStart    | String    | Timestamp of most expensive start     |
+| highestPrice          | double    | Price of the most expensive period    |
+| averagePrice          | double    | Average price within the period       |
+
+#### Example
+
+```json
+{
+    "highestPrice": 0.18921223574999999,
+    "lowestPrice": 0.17497929625,
+    "cheapestStart": "2025-05-31T15:12:58.135876781Z",
+    "averagePrice": 0.1810258046730769,
+    "mostExpensiveStart": "2025-05-31T15:37:58.135876781Z"
+}
+```
+
+### `bestPriceSchedule`
+
+Calculates best cost for a non-consecutive schedule.
+For use cases like battery electric vehicle or heat-pump.
+
+#### Parameters
+
+| Name          | Type      | Description              w             | Default          | Required  |
+|---------------|-----------|---------------------------------------|-------------------|-----------|
+| earliestStart | Instant   | Earliest start time                   | now               | no        |
+| latestStop    | Instant   | Latest end time                       | `priceInfoEnd`    | no        |
+| power         | int       | Needed power                          | N/A               | no        |
+| duration      | int       | Hour when spot prices are updated     | N/A               | yes       |
+
+#### Example
+
+```javascript
 rule "Tibber Schedule Calculation"
 when
     System started // use your trigger
@@ -353,6 +375,8 @@ end
 
 ```
 
+Console output
+
 ```
 2025-05-29 19:42:38.223 [INFO ] [hab.core.model.script.TibberSchedule] - {"cost":17.004625,"size":2,"schedule":[{"start":"2025-05-30T08:00:00Z","stop":"2025-05-30T16:00:00Z","duration":28800,"cost":16.407600000000002},{"start":"2025-05-29T23:00:00Z","stop":"2025-05-29T23:15:00Z","duration":900,"cost":0.5970249999999999}]}
 2025-05-29 19:42:38.225 [INFO ] [hab.core.model.script.TibberSchedule] - Cost : 17.004625 Number of schedules : 2
@@ -362,8 +386,54 @@ end
 2025-05-29 19:42:38.234 [INFO ] [hab.core.model.script.TibberSchedule] - Schedule 1 start: 2025-05-30T01:00+02:00[Europe/Berlin]
 ```
 
+#### Result
+
+JSON encoded `String` result with keys
+ 
+| Key           | Type      | Description                           | 
+|---------------|-----------|---------------------------------------|
+| size          | int       | Number of schedules                   |
+| schedule      | JsonArray | Array of `scheduleEntry` elements     |
+
+JSON Object `scheduleEntry`
+
+| Key           | Type      | Description                           | 
+|---------------|-----------|---------------------------------------|
+| timestamp     | String    | String encoded Instant                |
+| duration      | int       | Price duration in seconds             |
+| price         | double    | Price in your currency                |
+
+Provide either 
+
+- `timestamp` - duration will be calculated automatically _or_
+- `duration` if you already know it
+
+#### Example
+
+```json
+{
+    "cost": 16.092450000000003,
+    "size": 2,
+    "schedule": [
+        {
+            "start": "2025-06-01T08:00:00Z",
+            "stop": "2025-06-01T16:00:00Z",
+            "duration": 28800,
+            "cost": 15.579300000000002
+        },
+        {
+            "start": "2025-06-01T07:00:00Z",
+            "stop": "2025-06-01T07:15:00Z",
+            "duration": 900,
+            "cost": 0.51315
+        }
+    ]
+}
+```
 
 ## Full Example
+
+Full example with `demo.things` and `demo.items`
 
 ### `demo.things` Example
 
@@ -374,7 +444,7 @@ Thing tibber:tibberapi:xyz [ homeid="xxx", token="xxxxxxx", updateHour=13 ]
 ### `demo.items` Example
 
 ```java
-Number:EnergyPrice          Tibber_API_Spot_Prices              "Spot Prices"               {channel="tibber:tibberapi:xyz:price#spot-prices"}
+Number:EnergyPrice          Tibber_API_Spot_Prices              "Spot Prices"               {channel="tibber:tibberapi:xyz:price#spot-price"}
 Number                      Tibber_API_Price_Level              "Price Level"               {channel="tibber:tibberapi:xyz:price#level"}
 Number:EnergyPrice          Tibber_API_Average                  "Average Price"             {channel="tibber:tibberapi:xyz:price#average"}
 
