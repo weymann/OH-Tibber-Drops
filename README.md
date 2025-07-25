@@ -1,6 +1,6 @@
 # Tibber Binding
 
-The Tibber Binding retrieves `prices` form  [Tibber API](https://developer.tibber.com).
+The Tibber Binding retrieves `prices` from  [Tibber API](https://developer.tibber.com).
 Users equipped with Tibber Pulse hardware can connect in addition to [live group](#live-group) and [statistics group](#statistics-group).
 
 
@@ -18,7 +18,6 @@ Users equipped with Tibber Pulse hardware can connect in addition to [live group
 | homeid        | text      | Tibber Home ID                        | N/A       | yes       |
 | updateHour    | integer   | Hour when spot prices are updated     | 13        | yes       |
 
-
 Note: Tibber token is retrieved from your Tibber account:
 [Tibber Account](https://developer.tibber.com/settings/accesstoken)
 
@@ -29,7 +28,7 @@ Note: Tibber HomeId is retrieved from [developer.tibber.com](https://developer.t
 - If Tibber Pulse is connected, the Tibber API Explorer will report "true" for "realTimeConsumptionEnabled"
 - Copy HomeId from Tibber API Explorer, without quotation marks, and use this in the bindings configuration.
 
-```
+```graphql
 {
   viewer {
     homes {
@@ -51,11 +50,11 @@ If user have multiple HomeIds / Pulse, separate Things have to be created for th
 Current and forecast Tibber price information.
 All read-only.
 
-| Channel ID        | Type                 | Description         | Forecast |
-|-------------------|----------------------|---------------------|----------|
-| spot-price        | Number:EnergyPrice   | Spot Prices         | yes      |
-| level             | Number               | Price Level         | yes      |
-| average           | Number:EnergyPrice   | Average 24h         | yes      |
+| Channel ID        | Type                 | Description                            | Time Series  |
+|-------------------|----------------------|----------------------------------------|--------------|
+| spot-price        | Number:EnergyPrice   | Spot prices for today and tomorrow     | yes          |
+| level             | Number               | Price levels for today and tomorrow    | yes          |
+| average           | Number:EnergyPrice   | Average price from last 24 hours       | yes          |
 
 The `level` number is mapping the [Tibber Rating](https://developer.tibber.com/docs/reference#pricelevel) into numbers.
 Zero reflects _normal_ price while values above 0 are _expensive_ and values below 0 are _cheap_.
@@ -68,13 +67,12 @@ Mapping:
 - Expensive : 1
 - Very Expensive : 2
 
-
-The `average` values are not delivered by Tibber API.
+The `average` values are not delivered by the Tibber API.
 It's calculated by the binding to provide a trend line for the last 24 hours.
 After initial setup the average values will stay NULL until the next day because the previous 24 h prices cannot be obtained by the Tibber API.
 
-Please note forecasts are not supported by the default [rrd4j](https://www.openhab.org/addons/persistence/rrd4j/) persistence.
-The items connected to the above channels needs to be stored in [influxdb](https://www.openhab.org/addons/persistence/influxdb/) or [inmemory](https://www.openhab.org/addons/persistence/inmemory/).
+Please note time series are not supported by the default [rrd4j](https://www.openhab.org/addons/persistence/rrd4j/) persistence.
+The items connected to the above channels needs to be stored in e.g. [InfluxDB](https://www.openhab.org/addons/persistence/influxdb/) or [InMemory](https://www.openhab.org/addons/persistence/inmemory/).
 
 ### `live` group
 
@@ -85,7 +83,7 @@ All values read-only.
 |-----------------------|---------------------------|-------------------------------------------------------|
 | consumption           | Number:Power              | Consumption at the moment in watts                    |
 | minimum-consumption   | Number:Power              | Minimum power consumption since midnight in watts     |
-| peak-consumtion       | Number:Power              | Peak power consumption since midnight in watts        |
+| peak-consumption      | Number:Power              | Peak power consumption since midnight in watts        |
 | production            | Number:Power              | Net power production at the moment in watts           |
 | minimum-production    | Number:Power              | Minimum net power production since midnight in watts  |
 | peak-production       | Number:Power              | Maximum net power production since midnight in watts  |
@@ -95,7 +93,6 @@ All values read-only.
 | current1              | Number:ElectricCurrent    | Electric current on phase 1                           |
 | current2              | Number:ElectricCurrent    | Electric current on phase 2                           |
 | current3              | Number:ElectricCurrent    | Electric current on phase 3                           |
-
 
 ### `statistics` group
 
@@ -118,12 +115,11 @@ Thing actions can be used to perform calculations on the current available price
 Cache contains energy prices from today and after reaching the `updateHour` also for tomorrow.
 This is for planning when and for what cost a specific electric consumer can be started.  
 
-Performing a calcuation a `paramters` object is needed containing e.g. your boundaries for the calculation.
+Performing a calcuation a `parameters` object is needed containing e.g. your boundaries for the calculation.
 Parameter object allow 2 types: Java `Map` or JSON `String`.
 The result is returned as JSON encoded `String`.
 Refer below sections how the result looks like.
-Some real life are schown in [Action Examples](#action-examples) section.
-
+Some real life scenarios are schown in [Action Examples](#action-examples) section.
 
 ### `priceInfoStart`
 
@@ -142,6 +138,7 @@ In case of error `Instant.MIN` is returned.
 ### `listPrices`
 
 List prices in ascending / decending _price_ order.
+Use [persistence estensions](https://www.openhab.org/docs/configuration/persistence.html#persistence-extensions-in-scripts-and-rules) if you need _time_ ordering.
 
 #### Parameters
 
@@ -149,11 +146,11 @@ List prices in ascending / decending _price_ order.
 |---------------|-----------|---------------------------------------|-------------------|-----------|
 | earliestStart | Instant   | Earliest start time                   | now               | no        |
 | latestStop    | Instant   | Latest end time                       | `priceInfoEnd`    | no        |
-| ascending     | boolean   | Hour when spot prices are updated     | true              | no        |
+| ascending     | boolean   | Price sorting order                   | true              | no        |
 
 #### Example
 
-```javascript
+```java
 rule "Tibber Price List"
 when
     System started // use your trigger
@@ -265,7 +262,7 @@ JSON Object `curveEntry`
 
 #### Example
 
-```javascript
+```java
 import java.util.Map;
 
 var Timer bestPriceTimer = null
@@ -308,7 +305,6 @@ Console output:
 2025-05-29 16:07:40.967 [INFO ] [ab.core.model.script.TibberBestPrice] - Start your device
 ```
 
-
 #### Result
 
 JSON encoded `String` result with keys
@@ -340,12 +336,12 @@ For use cases like battery electric vehicle or heat-pump.
 
 #### Parameters
 
-| Name          | Type      | Description              w             | Default          | Required  |
-|---------------|-----------|---------------------------------------|-------------------|-----------|
-| earliestStart | Instant   | Earliest start time                   | now               | no        |
-| latestStop    | Instant   | Latest end time                       | `priceInfoEnd`    | no        |
-| power         | int       | Needed power                          | N/A               | no        |
-| duration      | int       | Hour when spot prices are updated     | N/A               | yes       |
+| Name          | Type      | Description                               | Default          | Required  |
+|---------------|-----------|-------------------------------------------|-------------------|-----------|
+| earliestStart | Instant   | Earliest start time                       | now               | no        |
+| latestStop    | Instant   | Latest end time                           | `priceInfoEnd`    | no        |
+| power         | int       | Needed power                              | N/A               | no        |
+| duration      | int       | Duration in seconds or String (8h 15m)    | N/A               | yes       |
 
 #### Example
 
@@ -356,7 +352,7 @@ when
 then
     var actions = getActions("tibber","tibber:tibberapi:xyz")
     // long period with constant power value
-    var parameters = "{\"power\": 11000, \"duration\": \"8 h 15 m\"}"
+    var parameters = "{\"power\": 11000, \"duration\": \"8h 15m\"}"
     var result = actions.bestPriceSchedule(parameters)
     // get cost and convert it into double value
     val costString = transform("JSONPATH", "$.cost", result)
@@ -450,7 +446,7 @@ Number:EnergyPrice          Tibber_API_Average                  "Average Price" 
 
 Number:Power                Tibber_API_Live_Cosnumption         "Live Consumption"          {channel="tibber:tibberapi:xyz:live#consumption"}
 Number:Power                Tibber_API_Minimum_Cosnumption      "Minimum Consumption"       {channel="tibber:tibberapi:xyz:live#minimum-consumption"}
-Number:Power                Tibber_API_Peak_Cosnumption         "Peak Consumption"          {channel="tibber:tibberapi:xyz:live#peak-consumtion"}
+Number:Power                Tibber_API_Peak_Cosnumption         "Peak Consumption"          {channel="tibber:tibberapi:xyz:live#peak-consumption"}
 Number:Power                Tibber_API_Live_Production          "Live Production"           {channel="tibber:tibberapi:xyz:live#production"}
 Number:Power                Tibber_API_Minimum_Production       "Minimum Production"        {channel="tibber:tibberapi:xyz:live#minimum-production"}
 Number:Power                Tibber_API_Peak_Production          "Peak Production"           {channel="tibber:tibberapi:xyz:live#peak-production"}
